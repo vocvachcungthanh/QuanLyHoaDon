@@ -115,6 +115,13 @@
         </svg>
         Giá thương hiệu
       </button>
+      <button onclick="switchTab('messages')" id="nav-messages" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all text-left">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+        </svg>
+        Tin nhắn
+        <span id="nav-msg-badge" class="ml-auto hidden bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-tight">0</span>
+      </button>
     </nav>
 
     <div class="mt-auto px-3 pb-4 pt-4 border-t border-slate-800">
@@ -402,6 +409,47 @@
         </div>
       </div>
 
+      <!-- MESSAGES -->
+      <div id="tab-messages" class="hidden" style="height:calc(100dvh - 140px)">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden flex flex-col h-full">
+
+          <!-- Header -->
+          <div class="flex items-center gap-3 px-4 py-3 border-b border-slate-800 flex-shrink-0">
+            <div class="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
+              <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+              </svg>
+            </div>
+            <div>
+              <div class="text-white font-semibold text-sm">Nhóm chat</div>
+              <div id="msg-count" class="text-xs text-slate-500">0 tin nhắn</div>
+            </div>
+          </div>
+
+          <!-- Danh sách tin nhắn -->
+          <div id="messages-list" class="flex-1 overflow-y-auto p-4 space-y-1">
+            <div class="text-center text-slate-500 text-sm py-8">Đang tải...</div>
+          </div>
+
+          <!-- Ô nhập tin nhắn -->
+          <div class="flex-shrink-0 px-4 py-3 border-t border-slate-800">
+            <div class="flex gap-2 items-end">
+              <textarea id="msg-input" rows="1"
+                placeholder="Nhập tin nhắn… (Enter gửi, Shift+Enter xuống dòng)"
+                class="flex-1 px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm transition-colors resize-none placeholder-slate-500 leading-relaxed"
+                onkeydown="handleMsgKeydown(event)" oninput="autoResizeInput(this)"></textarea>
+              <button onclick="sendMessage()"
+                class="p-2.5 bg-yellow-500 hover:bg-yellow-400 text-slate-900 rounded-xl transition-all active:scale-95 flex-shrink-0">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
     </main>
   </div>
 </div>
@@ -500,6 +548,14 @@
       <path stroke-linecap="round" stroke-linejoin="round" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/>
     </svg>
     <span class="text-[10px] font-medium">Thương hiệu</span>
+  </button>
+  <button onclick="switchTab('messages')" id="bnav-messages"
+    class="bnav flex-1 flex flex-col items-center justify-center py-3 gap-0.5 text-slate-500 transition-colors relative">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+    </svg>
+    <span class="text-[10px] font-medium">Tin nhắn</span>
+    <span id="bnav-msg-badge" class="hidden absolute top-1.5 right-3 bg-red-500 text-white text-[9px] font-bold px-1 py-0.5 rounded-full min-w-[15px] text-center leading-tight">0</span>
   </button>
 </nav>
 

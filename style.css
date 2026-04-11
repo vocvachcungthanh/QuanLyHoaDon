@@ -71,6 +71,11 @@
   to { transform: rotate(360deg); }
 }
 
+/* Badge tin nhắn chưa đọc — phóng to nhẹ khi có tin mới */
+#nav-msg-badge, #bnav-msg-badge {
+  transition: transform 0.15s ease;
+}
+
 
 /* ============================================================
    BẢNG HÓA ĐƠN — Nút thao tác hiện khi hover hàng
@@ -223,3 +228,7 @@ select:focus {
 
 /* --- Skeleton loading pulse ở light mode --- */
 [data-theme="light"] .animate-pulse { background-color: #e2e8f0 !important; }
+
+/* --- Tin nhắn của người khác ở light mode --- */
+[data-theme="light"] #messages-list .bg-slate-800 { background-color: #f1f5f9 !important; }
+[data-theme="light"] #messages-list .border-slate-700 { border-color: #e2e8f0 !important; }

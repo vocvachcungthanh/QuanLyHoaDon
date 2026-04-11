@@ -61,13 +61,15 @@ const db = isConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
    TRẠNG THÁI TOÀN CỤC (Global State)
 ============================================================ */
 
-let items     = []           // Danh sách hóa đơn đang hiển thị
-let brands    = []           // Danh sách thương hiệu giá vàng
-let activeTab = 'dashboard'  // Tab đang mở: 'dashboard' | 'invoices' | 'prices'
-let sortField = 'created_at' // Cột đang sắp xếp trong bảng hóa đơn
-let sortDir   = 'desc'       // Chiều sắp xếp: 'asc' (tăng) | 'desc' (giảm)
-let editingId = null         // ID hóa đơn đang chỉnh sửa (null = đang thêm mới)
-let activeCat = null         // Danh mục đang xem trong tab hóa đơn (null = xem tất cả danh mục)
+let items       = []           // Danh sách hóa đơn đang hiển thị
+let brands      = []           // Danh sách thương hiệu giá vàng
+let messages    = []           // Danh sách tin nhắn nhóm
+let currentUser = null         // Thông tin user đang đăng nhập
+let activeTab   = 'dashboard'  // Tab đang mở: 'dashboard' | 'invoices' | 'prices' | 'messages'
+let sortField   = 'created_at' // Cột đang sắp xếp trong bảng hóa đơn
+let sortDir     = 'desc'       // Chiều sắp xếp: 'asc' (tăng) | 'desc' (giảm)
+let editingId   = null         // ID hóa đơn đang chỉnh sửa (null = đang thêm mới)
+let activeCat   = null         // Danh mục đang xem trong tab hóa đơn (null = xem tất cả danh mục)
 
 
 /* ============================================================
@@ -142,7 +144,7 @@ function showToast(msg, type = 'success') {
 async function loadAll() {
   if (!isConfigured) { setDbStatus(false, 'Chưa cấu hình'); return }
   try {
-    await Promise.all([loadItems(), loadBrands()])
+    await Promise.all([loadItems(), loadBrands(), loadMessages()])
     setDbStatus(true, 'Đã kết nối')
     renderDashboard()
   } catch (e) {
@@ -200,9 +202,9 @@ function closeSidebar() {
 function switchTab(tab) {
   activeTab = tab
   closeSidebar()
-  const titles = { dashboard: 'Tổng quan', invoices: 'Hóa đơn', prices: 'Giá thương hiệu' }
+  const titles = { dashboard: 'Tổng quan', invoices: 'Hóa đơn', prices: 'Giá thương hiệu', messages: 'Tin nhắn' }
 
-  ;['dashboard', 'invoices', 'prices'].forEach(t => {
+  ;['dashboard', 'invoices', 'prices', 'messages'].forEach(t => {
     // Ẩn/hiện nội dung tab
     document.getElementById(`tab-${t}`).classList.toggle('hidden', t !== tab)
 
@@ -223,6 +225,7 @@ function switchTab(tab) {
   if (tab === 'dashboard') renderDashboard()
   if (tab === 'invoices')  backToCategories()
   if (tab === 'prices')    renderPricesTab()
+  if (tab === 'messages')  { markMessagesRead(); renderMessagesTab() }
 }
 
 
@@ -947,6 +950,7 @@ async function signOut() {
  * @param {object} user - Đối tượng user từ Supabase session
  */
 function onUserLoggedIn(user) {
+  currentUser = user
   hideLoginScreen()
   document.getElementById('sidebar-user-email').textContent = user?.email || ''
   loadAll().then(() => subscribeRealtime())
@@ -958,8 +962,10 @@ function onUserLoggedIn(user) {
  */
 function onUserLoggedOut() {
   if (db) db.removeAllChannels()
-  items  = []
-  brands = []
+  items       = []
+  brands      = []
+  messages    = []
+  currentUser = null
   showLoginScreen()
 }
 
@@ -1023,6 +1029,192 @@ async function loadBrands() {
 
 
 /* ============================================================
+   TIN NHẮN (Messages)
+============================================================ */
+
+// Số tin nhắn chưa đọc — lưu theo timestamp tin nhắn cuối đã đọc
+let lastReadAt = localStorage.getItem('lastReadAt') || '1970-01-01'
+
+/**
+ * Tải danh sách tin nhắn từ Supabase (100 tin mới nhất).
+ * Cập nhật biến toàn cục `messages` và badge thông báo.
+ */
+async function loadMessages() {
+  if (!db) return
+  const { data, error } = await withAuth(() =>
+    db.from('messages').select('*').order('created_at', { ascending: true }).limit(100)
+  )
+  if (error) { showToast('Lỗi tải tin nhắn: ' + error.message, 'error'); return }
+  messages = data || []
+  updateMsgBadge()
+  if (activeTab === 'messages') renderMessagesTab()
+}
+
+/**
+ * Render toàn bộ danh sách tin nhắn vào khung chat.
+ * Tin nhắn của mình nằm bên phải (màu vàng), tin người khác bên trái.
+ * Nhóm liên tiếp của cùng người gửi lại với nhau cho gọn.
+ */
+function renderMessagesTab() {
+  const list = document.getElementById('messages-list')
+  if (!list) return
+
+  document.getElementById('msg-count').textContent = `${messages.length} tin nhắn`
+
+  if (!messages.length) {
+    list.innerHTML = `<div class="text-center text-slate-500 text-sm py-12">Chưa có tin nhắn nào.<br>Hãy bắt đầu cuộc trò chuyện!</div>`
+    return
+  }
+
+  const myEmail = currentUser?.email || ''
+
+  list.innerHTML = messages.map((msg, idx) => {
+    const isMe   = msg.user_email === myEmail
+    const prev   = messages[idx - 1]
+    // Nhóm: nếu người gửi trước giống người gửi hiện tại → ẩn tên
+    const showHeader = !prev || prev.user_email !== msg.user_email
+
+    const time = new Date(msg.created_at).toLocaleString('vi-VN', {
+      hour: '2-digit', minute: '2-digit',
+      day: '2-digit',  month: '2-digit'
+    })
+
+    // Lấy chữ cái đầu của email làm avatar
+    const avatar  = msg.user_email.charAt(0).toUpperCase()
+    const content = escapeHtml(msg.content).replace(/\n/g, '<br>')
+
+    if (isMe) {
+      // Tin nhắn của mình — căn phải, màu vàng
+      return `<div class="flex flex-col items-end ${showHeader ? 'mt-3' : 'mt-0.5'}">
+        ${showHeader ? `<span class="text-[10px] text-slate-500 mb-1 mr-1">${time}</span>` : ''}
+        <div class="max-w-[80%] bg-yellow-500 text-slate-900 rounded-2xl rounded-br-sm px-4 py-2.5 text-sm font-medium leading-relaxed break-words">
+          ${content}
+        </div>
+      </div>`
+    } else {
+      // Tin nhắn của người khác — căn trái, màu slate
+      return `<div class="flex items-end gap-2 ${showHeader ? 'mt-3' : 'mt-0.5'}">
+        ${showHeader
+          ? `<div class="w-7 h-7 rounded-full bg-slate-700 border border-slate-600 flex items-center justify-center text-xs font-bold text-slate-300 flex-shrink-0">${avatar}</div>`
+          : `<div class="w-7 flex-shrink-0"></div>`
+        }
+        <div class="max-w-[80%]">
+          ${showHeader ? `<div class="text-[10px] text-slate-500 mb-1 ml-1">${msg.user_email} · ${time}</div>` : ''}
+          <div class="bg-slate-800 border border-slate-700 text-white rounded-2xl rounded-bl-sm px-4 py-2.5 text-sm leading-relaxed break-words">
+            ${content}
+          </div>
+        </div>
+      </div>`
+    }
+  }).join('')
+
+  // Cuộn xuống tin nhắn mới nhất
+  list.scrollTop = list.scrollHeight
+}
+
+/**
+ * Gửi tin nhắn mới lên Supabase.
+ * Xóa ô input sau khi gửi thành công, reset chiều cao textarea.
+ */
+async function sendMessage() {
+  const input   = document.getElementById('msg-input')
+  const content = input.value.trim()
+  if (!content) return
+  if (!currentUser) { showToast('Chưa đăng nhập', 'error'); return }
+
+  // Disable input tạm thời
+  input.disabled = true
+
+  const { error } = await db.from('messages').insert({
+    user_id:    currentUser.id,
+    user_email: currentUser.email,
+    content
+  })
+
+  input.disabled = false
+
+  if (error) { showToast('Gửi thất bại: ' + error.message, 'error'); return }
+
+  // Xóa input và reset chiều cao
+  input.value = ''
+  input.style.height = 'auto'
+  input.focus()
+  // Realtime subscription sẽ tự reload và render
+}
+
+/**
+ * Xử lý phím trong ô nhập tin nhắn.
+ * Enter → gửi tin nhắn. Shift+Enter → xuống dòng bình thường.
+ */
+function handleMsgKeydown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault()
+    sendMessage()
+  }
+}
+
+/**
+ * Tự động tăng chiều cao textarea theo nội dung người dùng nhập.
+ * Giới hạn tối đa 5 dòng (~120px).
+ */
+function autoResizeInput(el) {
+  el.style.height = 'auto'
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px'
+}
+
+/**
+ * Cập nhật badge số tin nhắn chưa đọc trên sidebar nav và bottom nav.
+ * So sánh timestamp tin nhắn với lần cuối người dùng mở tab messages.
+ */
+function updateMsgBadge() {
+  if (activeTab === 'messages') return
+  const unread = messages.filter(m =>
+    m.user_email !== currentUser?.email &&
+    new Date(m.created_at) > new Date(lastReadAt)
+  ).length
+
+  const sidebarBadge = document.getElementById('nav-msg-badge')
+  const bnavBadge    = document.getElementById('bnav-msg-badge')
+
+  if (unread > 0) {
+    const label = unread > 99 ? '99+' : String(unread)
+    ;[sidebarBadge, bnavBadge].forEach(el => {
+      if (!el) return
+      el.textContent = label
+      el.classList.remove('hidden')
+    })
+  } else {
+    ;[sidebarBadge, bnavBadge].forEach(el => el?.classList.add('hidden'))
+  }
+}
+
+/**
+ * Đánh dấu đã đọc tất cả tin nhắn khi mở tab messages.
+ * Lưu timestamp vào localStorage để nhớ qua các lần reload.
+ */
+function markMessagesRead() {
+  lastReadAt = new Date().toISOString()
+  localStorage.setItem('lastReadAt', lastReadAt)
+  const sidebarBadge = document.getElementById('nav-msg-badge')
+  const bnavBadge    = document.getElementById('bnav-msg-badge')
+  ;[sidebarBadge, bnavBadge].forEach(el => el?.classList.add('hidden'))
+}
+
+/**
+ * Escape ký tự HTML đặc biệt trong nội dung tin nhắn để tránh XSS.
+ * Quan trọng vì content được render bằng innerHTML.
+ * @param {string} str - Chuỗi cần escape
+ */
+function escapeHtml(str) {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
+
+/* ============================================================
    ĐỒNG HỒ & REALTIME
 ============================================================ */
 
@@ -1039,17 +1231,37 @@ let realtimeChannel = null
 
 /**
  * Đăng ký kênh Supabase Realtime để nhận cập nhật tức thì.
- * Khi có thay đổi trong bảng `items` → tự tải lại và render lại giao diện.
+ * Lắng nghe cả bảng `items` (hóa đơn) và `messages` (tin nhắn).
  * Hủy kênh cũ trước khi đăng ký kênh mới để tránh nghe trùng.
  */
 function subscribeRealtime() {
   if (!db) return
   if (realtimeChannel) db.removeChannel(realtimeChannel)
-  realtimeChannel = db.channel('public:items')
+
+  realtimeChannel = db.channel('app-realtime')
+    // Lắng nghe thay đổi bảng items
     .on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, async () => {
       await loadItems()
       if (activeTab === 'dashboard') renderDashboard()
       if (activeTab === 'invoices')  { activeCat ? renderTable() : renderCategories() }
+    })
+    // Lắng nghe tin nhắn mới
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, async (payload) => {
+      // Thêm tin nhắn mới trực tiếp vào mảng, không cần fetch lại toàn bộ
+      messages.push(payload.new)
+      document.getElementById('msg-count').textContent = `${messages.length} tin nhắn`
+
+      if (activeTab === 'messages') {
+        // Đang xem tab → render luôn và cuộn xuống
+        renderMessagesTab()
+        markMessagesRead()
+      } else {
+        // Đang ở tab khác → cập nhật badge nếu không phải tin của mình
+        updateMsgBadge()
+        // Rung nhẹ badge để thu hút chú ý
+        const b = document.getElementById('nav-msg-badge')
+        if (b) { b.classList.add('scale-125'); setTimeout(() => b.classList.remove('scale-125'), 200) }
+      }
     })
     .subscribe()
 }
