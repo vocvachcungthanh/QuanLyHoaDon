@@ -953,6 +953,8 @@ function onUserLoggedIn(user) {
   currentUser = user
   hideLoginScreen()
   document.getElementById('sidebar-user-email').textContent = user?.email || ''
+  // Xin quyền notification ngay sau đăng nhập
+  requestNotificationPermission()
   loadAll().then(() => subscribeRealtime())
 }
 
@@ -1122,24 +1124,29 @@ async function sendMessage() {
   if (!content) return
   if (!currentUser) { showToast('Chưa đăng nhập', 'error'); return }
 
-  // Disable input tạm thời
   input.disabled = true
 
-  const { error } = await db.from('messages').insert({
+  const { data, error } = await db.from('messages').insert({
     user_id:    currentUser.id,
     user_email: currentUser.email,
     content
-  })
+  }).select().single()
 
   input.disabled = false
 
   if (error) { showToast('Gửi thất bại: ' + error.message, 'error'); return }
 
-  // Xóa input và reset chiều cao
+  // Optimistic UI — thêm tin nhắn vào mảng ngay lập tức, không chờ Realtime
+  // Tránh thêm trùng nếu Realtime cũng push về
+  if (data && !messages.find(m => m.id === data.id)) {
+    messages.push(data)
+    renderMessagesTab()
+    markMessagesRead()
+  }
+
   input.value = ''
   input.style.height = 'auto'
   input.focus()
-  // Realtime subscription sẽ tự reload và render
 }
 
 /**
@@ -1200,6 +1207,61 @@ function markMessagesRead() {
   ;[sidebarBadge, bnavBadge].forEach(el => el?.classList.add('hidden'))
 }
 
+/* ============================================================
+   BROWSER NOTIFICATION — Thông báo tin nhắn mới
+============================================================ */
+
+/**
+ * Xin quyền gửi browser notification.
+ * Được gọi khi user đăng nhập thành công.
+ * Nếu user từ chối → im lặng, không hỏi lại.
+ */
+async function requestNotificationPermission() {
+  if (!('Notification' in window)) return
+  if (Notification.permission === 'default') {
+    await Notification.requestPermission()
+  }
+}
+
+/**
+ * Gửi browser notification khi có tin nhắn mới từ người khác.
+ * Chỉ gửi nếu:
+ * - Trình duyệt hỗ trợ Notification API
+ * - Người dùng đã cấp quyền
+ * - Tin nhắn không phải của mình
+ * - Tab hiện tại không phải tab messages
+ * @param {object} msg - Đối tượng tin nhắn từ Supabase
+ */
+function pushNotification(msg) {
+  if (!('Notification' in window)) return
+  if (Notification.permission !== 'granted') return
+  if (msg.user_email === currentUser?.email) return
+
+  // Rút ngắn tên người gửi (lấy phần trước @)
+  const sender  = msg.user_email.split('@')[0]
+  const preview = msg.content.length > 60
+    ? msg.content.slice(0, 60) + '...'
+    : msg.content
+
+  const notif = new Notification(`💬 ${sender}`, {
+    body: preview,
+    icon: '/favicon.svg',
+    badge: '/favicon.svg',
+    tag: 'qlhd-message',   // Cùng tag → tin mới ghi đè tin cũ, không bị spam
+    renotify: true,
+  })
+
+  // Nhấn vào notification → focus tab và mở tab messages
+  notif.onclick = () => {
+    window.focus()
+    switchTab('messages')
+    notif.close()
+  }
+
+  // Tự đóng sau 5 giây
+  setTimeout(() => notif.close(), 5000)
+}
+
 /**
  * Escape ký tự HTML đặc biệt trong nội dung tin nhắn để tránh XSS.
  * Quan trọng vì content được render bằng innerHTML.
@@ -1245,22 +1307,25 @@ function subscribeRealtime() {
       if (activeTab === 'dashboard') renderDashboard()
       if (activeTab === 'invoices')  { activeCat ? renderTable() : renderCategories() }
     })
-    // Lắng nghe tin nhắn mới
+    // Lắng nghe tin nhắn mới từ người khác qua Realtime
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, async (payload) => {
-      // Thêm tin nhắn mới trực tiếp vào mảng, không cần fetch lại toàn bộ
-      messages.push(payload.new)
+      const msg = payload.new
+
+      // Bỏ qua nếu tin đã có trong mảng (do optimistic UI đã thêm rồi)
+      if (messages.find(m => m.id === msg.id)) return
+
+      messages.push(msg)
       document.getElementById('msg-count').textContent = `${messages.length} tin nhắn`
 
       if (activeTab === 'messages') {
-        // Đang xem tab → render luôn và cuộn xuống
         renderMessagesTab()
         markMessagesRead()
       } else {
-        // Đang ở tab khác → cập nhật badge nếu không phải tin của mình
+        // Đang ở tab khác → badge + browser notification
         updateMsgBadge()
-        // Rung nhẹ badge để thu hút chú ý
         const b = document.getElementById('nav-msg-badge')
         if (b) { b.classList.add('scale-125'); setTimeout(() => b.classList.remove('scale-125'), 200) }
+        pushNotification(msg)
       }
     })
     .subscribe()
