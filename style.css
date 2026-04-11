@@ -1,0 +1,225 @@
+/* ============================================================
+   style.css — Stylesheet chính của ứng dụng Quản Lý Hóa Đơn
+   Tailwind CDN xử lý utility classes, file này chứa:
+   - Reset & base
+   - Custom animations
+   - Component-specific overrides
+   - iOS safe area
+   - Light theme overrides
+============================================================ */
+
+
+/* ============================================================
+   BASE & RESET
+============================================================ */
+
+/* Đảm bảo padding/border tính vào kích thước phần tử, không bị tràn */
+* {
+  box-sizing: border-box;
+}
+
+
+/* ============================================================
+   SCROLLBAR — Tuỳ chỉnh thanh cuộn (WebKit: Chrome, Safari, Edge)
+============================================================ */
+
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: 4px;
+}
+
+
+/* ============================================================
+   ANIMATIONS — Hiệu ứng chuyển động
+============================================================ */
+
+/* Thanh tiến trình trong biểu đồ nơi mua — trượt ra từ trái */
+.bar {
+  transition: width 0.6s ease;
+}
+
+/* Hiệu ứng xuất hiện từ trên xuống — dùng cho modal, dropdown */
+.fade-in {
+  animation: fadeIn 0.2s ease;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Hiệu ứng toast nổi lên từ dưới */
+.toast-enter {
+  animation: toastIn 0.25s ease forwards;
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Hiệu ứng xoay vòng — dùng cho spinner loading */
+.spin {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+
+/* ============================================================
+   BẢNG HÓA ĐƠN — Nút thao tác hiện khi hover hàng
+============================================================ */
+
+/* Mặc định ẩn nút sửa/xóa, chỉ hiện khi hover vào hàng */
+.row-actions {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+tr.data-row:hover .row-actions {
+  opacity: 1;
+}
+/* Trên mobile luôn hiện nút thao tác (không có hover) */
+@media (max-width: 1023px) {
+  .row-actions { opacity: 1; }
+}
+
+
+/* ============================================================
+   INPUT & SELECT — Highlight viền vàng khi focus
+============================================================ */
+
+input:focus,
+select:focus {
+  outline: none;
+  border-color: #f59e0b !important;
+}
+
+
+/* ============================================================
+   SIDEBAR — Hiệu ứng trượt vào/ra trên mobile
+============================================================ */
+
+#sidebar {
+  transition: transform 0.28s cubic-bezier(.4, 0, .2, 1);
+}
+#sidebar-overlay {
+  transition: opacity 0.28s ease;
+}
+
+
+/* ============================================================
+   MODAL — Trượt lên từ dưới trên mobile (< 640px)
+============================================================ */
+
+@media (max-width: 639px) {
+  #modal-box {
+    border-radius: 1.25rem 1.25rem 0 0;
+    max-height: 92dvh;
+    overflow-y: auto;
+  }
+}
+
+
+/* ============================================================
+   iOS SAFE AREA — Tránh bị che bởi thanh home indicator iPhone
+============================================================ */
+
+/* Bottom nav tự mở rộng xuống vùng safe area của iPhone */
+.bottom-nav-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Nội dung chính có padding dưới đủ để không bị bottom nav che */
+.main-safe {
+  padding-bottom: calc(6rem + env(safe-area-inset-bottom));
+}
+
+
+/* ============================================================
+   LIGHT THEME — Ghi đè màu sắc khi chọn chế độ sáng
+   Áp dụng khi <html data-theme="light">
+============================================================ */
+
+/* Nền trang và màu chữ cơ bản */
+[data-theme="light"] body         { background-color: #f1f5f9; color: #1e293b; }
+[data-theme="light"] #login-screen { background-color: #f1f5f9; }
+
+/* --- Cấu trúc layout --- */
+[data-theme="light"] #sidebar      { background-color: #ffffff; border-right-color: #e2e8f0; }
+[data-theme="light"] header         { background-color: rgba(241,245,249,0.95) !important; border-bottom-color: #e2e8f0; }
+[data-theme="light"] nav.fixed      { background-color: #ffffff; border-top-color: #e2e8f0; }
+[data-theme="light"] #modal-box     { background-color: #ffffff; border-color: #cbd5e1; }
+[data-theme="light"] #config-banner { background-color: rgba(254,242,242,0.9); border-color: #fca5a5; color: #991b1b; }
+
+/* --- Màu nền các phần tử --- */
+[data-theme="light"] .bg-slate-950     { background-color: #f1f5f9 !important; }
+[data-theme="light"] .bg-slate-900     { background-color: #ffffff !important; }
+[data-theme="light"] .bg-slate-800     { background-color: #e2e8f0 !important; }
+[data-theme="light"] .bg-slate-700     { background-color: #cbd5e1 !important; }
+[data-theme="light"] .bg-slate-800\/60 { background-color: rgba(226,232,240,0.7) !important; }
+[data-theme="light"] .bg-slate-800\/50 { background-color: rgba(226,232,240,0.6) !important; }
+[data-theme="light"] .bg-slate-800\/40 { background-color: rgba(226,232,240,0.5) !important; }
+[data-theme="light"] .bg-slate-800\/30 { background-color: rgba(226,232,240,0.4) !important; }
+[data-theme="light"] .bg-slate-700\/60 { background-color: rgba(203,213,225,0.7) !important; }
+[data-theme="light"] .bg-slate-950\/90 { background-color: rgba(241,245,249,0.95) !important; }
+[data-theme="light"] .bg-slate-950\/70 { background-color: rgba(51,65,85,0.5) !important; }
+[data-theme="light"] .bg-slate-900\/80 { background-color: rgba(255,255,255,0.8) !important; }
+[data-theme="light"] .bg-yellow-500\/10 { background-color: rgba(234,179,8,0.1) !important; }
+
+/* --- Màu viền --- */
+[data-theme="light"] .border-slate-800     { border-color: #e2e8f0 !important; }
+[data-theme="light"] .border-slate-700     { border-color: #cbd5e1 !important; }
+[data-theme="light"] .border-slate-800\/50 { border-color: rgba(226,232,240,0.8) !important; }
+[data-theme="light"] .border-slate-800\/60 { border-color: rgba(226,232,240,0.9) !important; }
+
+/* --- Màu chữ --- */
+[data-theme="light"] .text-white   { color: #0f172a !important; }
+[data-theme="light"] .text-slate-300 { color: #334155 !important; }
+[data-theme="light"] .text-slate-400 { color: #64748b !important; }
+[data-theme="light"] .text-slate-500 { color: #94a3b8 !important; }
+[data-theme="light"] .text-slate-600 { color: #64748b !important; }
+
+/* --- Hover states --- */
+[data-theme="light"] .hover\:bg-slate-800:hover     { background-color: #f1f5f9 !important; }
+[data-theme="light"] .hover\:bg-slate-700:hover     { background-color: #e2e8f0 !important; }
+[data-theme="light"] .hover\:bg-slate-800\/30:hover { background-color: rgba(226,232,240,0.6) !important; }
+[data-theme="light"] .hover\:text-white:hover       { color: #0f172a !important; }
+
+/* --- Input và Select --- */
+[data-theme="light"] input[type="text"],
+[data-theme="light"] input[type="number"],
+[data-theme="light"] select {
+  background-color: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+[data-theme="light"] input::placeholder { color: #94a3b8 !important; }
+[data-theme="light"] datalist option    { background-color: #ffffff; color: #0f172a; }
+
+/* --- Hover hàng bảng --- */
+[data-theme="light"] tr.data-row:hover td { background-color: #f8fafc !important; }
+
+/* --- Gradient overlay trên card danh mục (làm nhạt hơn ở light mode) --- */
+[data-theme="light"] .from-yellow-500\/10  { --tw-gradient-from: rgba(234,179,8,0.08) !important; }
+[data-theme="light"] .from-slate-400\/10   { --tw-gradient-from: rgba(148,163,184,0.08) !important; }
+[data-theme="light"] .from-blue-500\/10    { --tw-gradient-from: rgba(59,130,246,0.08) !important; }
+[data-theme="light"] .from-purple-500\/10  { --tw-gradient-from: rgba(168,85,247,0.08) !important; }
+[data-theme="light"] .from-slate-600\/10   { --tw-gradient-from: rgba(71,85,105,0.06) !important; }
+[data-theme="light"] .from-emerald-500\/5  { --tw-gradient-from: rgba(16,185,129,0.05) !important; }
+
+/* --- Gradient footer bảng hóa đơn --- */
+[data-theme="light"] .from-slate-800\/80 { --tw-gradient-from: rgba(226,232,240,0.8) !important; }
+[data-theme="light"] .to-slate-800\/40   { --tw-gradient-to:   rgba(226,232,240,0.4) !important; }
+
+/* --- Scrollbar ở light mode --- */
+[data-theme="light"] ::-webkit-scrollbar-track { background: #f1f5f9; }
+[data-theme="light"] ::-webkit-scrollbar-thumb { background: #cbd5e1; }
+
+/* --- Skeleton loading pulse ở light mode --- */
+[data-theme="light"] .animate-pulse { background-color: #e2e8f0 !important; }
