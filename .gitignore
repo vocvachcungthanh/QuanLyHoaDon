@@ -1,2 +1,4 @@
-# Chứa thông tin kết nối Supabase — KHÔNG commit lên git
-# env.js
+# Không ignore env.js nữa vì:
+# - SUPABASE_ANON_KEY là public key, được thiết kế để dùng trong browser
+# - Bảo mật thật sự đến từ Row Level Security (RLS) trên Supabase
+# - Xem README để biết thêm
