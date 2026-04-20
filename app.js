@@ -691,12 +691,66 @@ async function updateBrand(id) {
   const price = parseInt(document.getElementById(`ep-price-${id}`).value)
   if (!name)              { showToast('Tên không được để trống', 'error'); return }
   if (!price || price <= 0) { showToast('Giá không hợp lệ', 'error'); return }
+
+  // Lưu giá cũ để tìm hóa đơn cần cập nhật
+  const oldBrand = brands.find(b => b.id === id)
+  const oldPrice = oldBrand?.price
+
   const { error } = await db.from('brands').update({ name, code, price, updated_at: new Date().toISOString() }).eq('id', id)
   if (error) { showToast('Lỗi cập nhật: ' + error.message, 'error'); return }
+
+  // Đồng bộ sell_price của hóa đơn khớp theo tên/mã thương hiệu
+  if (oldPrice !== price) {
+    const brandNorm = normStr(name)
+    const codeNorm  = code ? normStr(code) : null
+    const toUpdate  = items.filter(i => {
+      const loc = normStr(i.location)
+      return loc === brandNorm || brandNorm.includes(loc) || loc.includes(brandNorm)
+          || (codeNorm && (loc === codeNorm || loc.includes(codeNorm) || codeNorm.includes(loc)))
+    })
+    if (toUpdate.length > 0) {
+      await Promise.all(toUpdate.map(i =>
+        db.from('items').update({ sell_price: Number(i.quantity) * price }).eq('id', i.id)
+      ))
+    }
+  }
+
   await loadBrands()
+  await loadItems()
   renderPricesTab()
   renderSidebar()
+  renderDashboard()
+  if (activeTab === 'invoices') { activeCat ? renderTable() : renderCategories() }
   showToast(`Đã cập nhật thương hiệu ${name}`)
+}
+
+/**
+ * Đồng bộ sell_price của hóa đơn về quantity × brand.price.
+ * Khớp hóa đơn theo tên nơi mua ≈ tên thương hiệu (case-insensitive, substring).
+ */
+function normStr(s) {
+  return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd')
+}
+
+async function syncBrandItems(id) {
+  const brand = brands.find(b => b.id === id)
+  if (!brand) return
+  const brandNorm = normStr(brand.name)
+  const codeNorm  = brand.code ? normStr(brand.code) : null
+  const toUpdate = items.filter(i => {
+    const loc = normStr(i.location)
+    return loc === brandNorm || brandNorm.includes(loc) || loc.includes(brandNorm)
+        || (codeNorm && (loc === codeNorm || loc.includes(codeNorm) || codeNorm.includes(loc)))
+  })
+  if (toUpdate.length === 0) { showToast('Không tìm thấy hóa đơn khớp với thương hiệu này', 'error'); return }
+  if (!confirm(`Cập nhật dự tính bán cho ${toUpdate.length} hóa đơn về ${brand.price.toLocaleString()} × số lượng?`)) return
+  await Promise.all(toUpdate.map(i =>
+    db.from('items').update({ sell_price: Number(i.quantity) * brand.price }).eq('id', i.id)
+  ))
+  await loadItems()
+  renderDashboard()
+  if (activeTab === 'invoices') { activeCat ? renderTable() : renderCategories() }
+  showToast(`Đã đồng bộ ${toUpdate.length} hóa đơn → ${fmt(brand.price)}/chỉ`)
 }
 
 /**
